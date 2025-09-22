@@ -6,4 +6,4 @@ scikit-learn
 jupyter
 nbconvert
 requests
-keras-tcn==3.5.0
+tensorflow-addons
