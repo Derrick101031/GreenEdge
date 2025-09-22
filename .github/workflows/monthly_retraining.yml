@@ -1,61 +1,52 @@
-# GitHub Actions Workflow: Automated TinyML Model Retraining
-# This workflow automates the process of retraining your TCN model.
-# It runs a Python script monthly to fetch new data from ThingSpeak,
-# retrain the model, quantize it, and commit the updated C header file
-# back to the repository.
-
-name: Monthly Model Retraining
+name: Train and Deploy Model
 
 on:
-  # Trigger the workflow to run automatically at 00:00 on the 1st of every month
   schedule:
-    - cron: '0 0 1 * *'
+    - cron: '0 2 * * *'  # Run daily at 2 AM UTC
+  workflow_dispatch:  # Allow manual trigger
 
-  # Allows you to run this workflow manually from the Actions tab for testing
-  workflow_dispatch:
+permissions:
+  contents: write  # This gives write permissions to the repository
+  actions: read
 
 jobs:
-  train-and-deploy:
+  train-model:
     runs-on: ubuntu-latest
-
+    
     steps:
-      # Step 1: Check out the repository code
-      # This step downloads your repository content into the runner.
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
 
-      # Step 2: Set up Python environment
-      # Installs Python for running the training script.
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
 
-      # Step 3: Install Python dependencies
-      # Reads the requirements.txt file and installs all necessary libraries.
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Install xxd (if needed)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xxd
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xxd
 
-      # Step 4: Run the training script
-      # This is the core step. It runs the train_model.py script, which handles
-      # data fetching, training, quantization, and C header file generation.
-      - name: Fetch data, train, and convert model
-        env:
-          THINGSPEAK_CHANNEL_ID: ${{ secrets.THINGSPEAK_CHANNEL_ID }}
-          THINGSPEAK_READ_API_KEY: ${{ secrets.THINGSPEAK_READ_API_KEY }}
-        run: python train_model.py
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
-      # Step 5: Commit the updated model file back to the repository
-      # This action automatically commits changes in the specified file pattern.
-      - name: Commit and push updated model
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore: Automated monthly model retraining"
-          file_pattern: tcn_model.h
+    - name: Run model training
+      env:
+        THINGSPEAK_CHANNEL_ID: ${{ secrets.THINGSPEAK_CHANNEL_ID }}
+        THINGSPEAK_READ_API_KEY: ${{ secrets.THINGSPEAK_READ_API_KEY }}
+      run: |
+        python train_model.py
 
+    - name: Commit and push updated model
+      uses: stefanzweifel/git-auto-commit-action@v5
+      with:
+        commit_message: 'chore: Automated monthly model retraining'
+        file_pattern: 'tcn_model.h tcn_model_quant_9_features.tflite dataset.csv'
+        commit_user_name: 'github-actions[bot]'
+        commit_user_email: '41898282+github-actions[bot]@users.noreply.github.com'
+        commit_author: 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
