@@ -1,0 +1,57 @@
+# GitHub Actions Workflow: Automated TinyML Model Retraining
+# This workflow automates the process described in the research thesis[cite: 266].
+# It runs the Jupyter Notebook to retrain the TCN model, quantizes it,
+# and commits the updated C++ header file back to the repository.
+
+name: Automated Model Retraining
+
+# 1. DEFINE TRIGGERS
+# This workflow runs on a weekly schedule (every Monday at 3:00 AM CAT)
+# and can also be triggered manually from the GitHub Actions tab ('workflow_dispatch').
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * 1' # Runs at 01:00 UTC, which is 3:00 AM CAT
+
+# 2. DEFINE THE JOB
+jobs:
+  build-and-commit:
+    runs-on: ubuntu-latest # Use a standard Linux virtual machine
+
+    # 3. DEFINE THE STEPS
+    steps:
+      # Step 3.1: Check out the repository code
+      # This step downloads your repository content into the runner.
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Step 3.2: Set up Python environment
+      # Installs Python for running the training script.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Step 3.3: Install Python dependencies
+      # Reads the requirements.txt file and installs all necessary libraries.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 3.4: Execute the Jupyter Notebook
+      # This is the core retraining step. It runs the entire model.ipynb notebook.
+      # The notebook will generate the 'model_data.h' file.
+      - name: Run model training notebook
+        run: jupyter nbconvert --to notebook --execute model.ipynb
+
+      # Step 3.5: Commit the updated model file
+      # This step checks for changes to 'model_data.h' and commits them back.
+      - name: Commit and push if changed
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add model_data.h
+          # The following command commits only if there are actual changes to the file
+          git diff --quiet --exit-code model_data.h || git commit -m "Automated model update: new tcn_model.h [skip ci]"
+          git push
