@@ -6,4 +6,3 @@ scikit-learn
 jupyter
 nbconvert
 requests
-tensorflow-addons
