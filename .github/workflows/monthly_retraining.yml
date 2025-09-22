@@ -1,0 +1,43 @@
+name: Monthly Model Retraining
+
+on:
+  # Trigger the workflow to run automatically at 00:00 on the 1st of every month
+  schedule:
+    - cron: '0 0 1 * *'
+  
+  # Allows you to run this workflow manually from the Actions tab for testing
+  workflow_dispatch:
+
+jobs:
+  train-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repository code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python environment
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Step 3: Install dependencies
+      - name: Install Python libraries
+        run: |
+          pip install tensorflow pandas numpy scikit-learn requests tcn
+
+      # Step 4: Run the training script
+      - name: Fetch data, train, and convert model
+        env:
+          THINGSPEAK_CHANNEL_ID: ${{ secrets.THINGSPEAK_CHANNEL_ID }}
+          THINGSPEAK_READ_API_KEY: ${{ secrets.THINGSPEAK_READ_API_KEY }}
+        run: python train_model.py
+
+      # Step 5: Commit the updated model file back to the repository
+      - name: Commit and push updated model
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: Automated monthly model retraining"
+          file_pattern: tcn_model.h
