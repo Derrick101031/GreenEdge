@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
-from keras_tcn import TCN  # Corrected: use underscore for import
+from keras-tcn import TCN  # Corrected: use underscore for import
 from sklearn.preprocessing import MinMaxScaler
 import requests
 import json
