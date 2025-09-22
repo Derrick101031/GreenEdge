@@ -1,15 +1,14 @@
-# preprocess_thingspeak.py
-# This script reads the raw CSV from ThingSpeak and prepares it for the model notebook.
+# preprocess_thingspeak.py (v1.1 - More Robust)
+# This script reads the raw CSV from ThingSpeak, validates the columns,
+# and prepares it for the model notebook.
 
 import pandas as pd
 import os
 
 # --- Configuration ---
-# This mapping is based on the fields sent in dt.ino [cite: 96]
-# and the column names expected in model.ipynb
 COLUMN_MAPPING = {
     'created_at': 'timestamp',
-    'field1': 'soil_moisture', # Sent as vwc in the .ino file
+    'field1': 'soil_moisture',
     'field2': 'soil_temp',
     'field3': 'ec',
     'field4': 'ph',
@@ -22,28 +21,52 @@ OUTPUT_FILENAME = "dataset.csv"
 # --- Main Script ---
 if __name__ == "__main__":
     if not os.path.exists(INPUT_FILENAME):
-        print(f"Error: Input file '{INPUT_FILENAME}' not found. Skipping pre-processing.")
-        exit()
+        print(f"Error: Input file '{INPUT_FILENAME}' not found. Did the download fail?")
+        exit(1)
 
     print(f"Reading raw data from {INPUT_FILENAME}...")
-    df = pd.read_csv(INPUT_FILENAME)
+    try:
+        df = pd.read_csv(INPUT_FILENAME)
+    except Exception as e:
+        print(f"Error reading CSV file: {e}")
+        print("The file might be empty or not in CSV format. Check ThingSpeak API key and channel ID.")
+        exit(1)
 
-    # Keep only the columns we need
-    df = df[list(COLUMN_MAPPING.keys())]
+    # --- NEW: Robust column handling ---
+    # Find which of the required columns actually exist in the downloaded file
+    available_columns = [col for col in COLUMN_MAPPING.keys() if col in df.columns]
+    
+    if not available_columns:
+        print("Error: None of the expected columns (created_at, field1, etc.) were found in the downloaded data.")
+        print("Please verify your THINGSPEAK_CHANNEL_ID and THINGSPEAK_READ_API_KEY secrets.")
+        exit(1)
 
-    # Rename columns to match the notebook's expectations
+    print(f"Found available columns: {available_columns}")
+
+    # Keep only the columns that are available
+    df = df[available_columns]
+
+    # Rename the available columns to match the notebook's expectations
     df.rename(columns=COLUMN_MAPPING, inplace=True)
     
     # The notebook expects a specific date format, so let's set the index
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-    df.set_index('timestamp', inplace=True)
+    if 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df.set_index('timestamp', inplace=True)
 
     # Convert all data columns to numeric, coercing errors
     for col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+        if col != 'timestamp': # Don't try to convert the index
+            df[col] = pd.to_numeric(df[col], errors='coerce')
     
-    # Drop rows with any non-numeric data
+    # Drop rows with any missing data after conversion
     df.dropna(inplace=True)
+
+    if df.empty:
+        print("Warning: The final DataFrame is empty after cleaning. Not enough valid data was fetched.")
+        # We can either exit or create an empty dataset.csv
+        # For this use case, we'll exit to make the issue clear in the logs.
+        exit(1)
 
     print(f"Saving pre-processed data to {OUTPUT_FILENAME}...")
     df.to_csv(OUTPUT_FILENAME)
