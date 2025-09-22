@@ -6,4 +6,4 @@ scikit-learn
 jupyter
 nbconvert
 requests
-keras-tcn
+keras_tcn
