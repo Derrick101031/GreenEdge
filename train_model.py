@@ -3,16 +3,15 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
-from keras-tcn import TCN  # Corrected: use underscore for import
+from tensorflow.keras.layers import Dense, Conv1D, Dropout, Lambda, Add
 from sklearn.preprocessing import MinMaxScaler
 import requests
 import json
 
 # --- Configuration ---
 # ThingSpeak Details (will be read from GitHub Secrets)
-CHANNEL_ID = os.environ.get('2989839')
-READ_API_KEY = os.environ.get('UK3XB82WBJS8ICO8')
+CHANNEL_ID = os.environ.get('THINGSPEAK_CHANNEL_ID', '2989839')
+READ_API_KEY = os.environ.get('THINGSPEAK_READ_API_KEY', 'UK3XB82WBJS8ICO8')
 RESULTS = 8000 # Max results per request from ThingSpeak
 
 DATASET_PATH = "dataset.csv"
@@ -20,6 +19,51 @@ TFLITE_MODEL_PATH = "tcn_model_quant_9_features.tflite"
 MODEL_HEADER_PATH = 'tcn_model.h'
 TARGET_VARIABLE = 'soil_moisture'
 WINDOW_SIZE = 24
+
+def residual_block(x, dilation_rate, nb_filters, kernel_size, dropout_rate=0.1):
+    """Create a residual block for TCN."""
+    # Dilated convolution
+    conv = Conv1D(filters=nb_filters,
+                  kernel_size=kernel_size,
+                  dilation_rate=dilation_rate,
+                  padding='causal',
+                  activation='relu')(x)
+    conv = Dropout(dropout_rate)(conv)
+    
+    # Second convolution
+    conv = Conv1D(filters=nb_filters,
+                  kernel_size=kernel_size,
+                  dilation_rate=dilation_rate,
+                  padding='causal',
+                  activation='relu')(conv)
+    conv = Dropout(dropout_rate)(conv)
+    
+    # Residual connection
+    if x.shape[-1] != nb_filters:
+        # Match dimensions for residual connection
+        x = Conv1D(filters=nb_filters, kernel_size=1, padding='same')(x)
+    
+    return Add()([x, conv])
+
+def create_tcn_model(input_shape, nb_filters=24, kernel_size=3, dilations=[1, 2, 4], dropout_rate=0.1):
+    """Create a TCN model using standard Keras layers."""
+    inputs = tf.keras.Input(shape=input_shape)
+    x = inputs
+    
+    # Initial convolution
+    x = Conv1D(filters=nb_filters, kernel_size=1, padding='same')(x)
+    
+    # Stack residual blocks with different dilation rates
+    for dilation in dilations:
+        x = residual_block(x, dilation, nb_filters, kernel_size, dropout_rate)
+    
+    # Global temporal pooling
+    x = Lambda(lambda x: x[:, -1, :])(x)  # Take last timestep
+    
+    # Output layer
+    outputs = Dense(1)(x)
+    
+    return tf.keras.Model(inputs, outputs)
 
 def fetch_thingspeak_data():
     """Fetches data from ThingSpeak and saves it to a CSV file."""
@@ -90,7 +134,7 @@ def main():
         'soil_moisture', 'soil_temp', 'ec', 'ph', 'ambient_temp', 'ambient_hum',
         'hour_sin', 'hour_cos', 'temp_humidity_interaction'
     ]
-    df_model = df[MODEL_FEATURES].copy() # Use .copy() to avoid SettingWithCopyWarning
+    df_model = df[MODEL_FEATURES].copy()
     df_model.ffill(inplace=True)
     df_model.bfill(inplace=True)
 
@@ -131,22 +175,16 @@ def main():
     
     # Step 6: Build and Train TCN Model
     print("Building and training TCN model...")
-    model = Sequential([
-        TCN(
-            input_shape=(WINDOW_SIZE, X_train.shape[2]),
-            nb_filters=24,
-            kernel_size=3,
-            dilations=[1, 2, 4],
-            padding='causal',
-            use_skip_connections=True,
-            dropout_rate=0.1,
-            return_sequences=False
-        ),
-        Dense(1)
-    ])
+    model = create_tcn_model(
+        input_shape=(WINDOW_SIZE, X_train.shape[2]),
+        nb_filters=24,
+        kernel_size=3,
+        dilations=[1, 2, 4],
+        dropout_rate=0.1
+    )
     
     model.compile(
-        optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=0.005), # Using legacy Adam for broader compatibility
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.005),
         loss='mean_squared_error'
     )
 
@@ -203,4 +241,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
