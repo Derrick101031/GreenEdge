@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
-from tcn import TCN
+from keras_tcn import TCN  # Using keras-tcn for better compatibility
 from sklearn.preprocessing import MinMaxScaler
 import requests
 import json
@@ -203,3 +203,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
