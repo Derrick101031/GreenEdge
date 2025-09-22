@@ -1,57 +1,61 @@
-# GitHub Actions Workflow: Automated TinyML Model Retraining
-# This workflow automates the process described in the research thesis[cite: 266].
-# It runs the Jupyter Notebook to retrain the TCN model, quantizes it,
-# and commits the updated C++ header file back to the repository.
+# GitHub Actions Workflow: Automated TinyML Model Retraining (with ThingSpeak Integration)
+# This workflow runs monthly to fetch the latest data from ThingSpeak,
+# pre-process it, retrain the TCN model, and commit the updated header file.
 
 name: Automated Model Retraining
 
-# 1. DEFINE TRIGGERS
-# This workflow runs on a weekly schedule (every Monday at 3:00 AM CAT)
-# and can also be triggered manually from the GitHub Actions tab ('workflow_dispatch').
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 1 * * 1' # Runs at 01:00 UTC, which is 3:00 AM CAT
+    # 1. SCHEDULE CHANGED
+    # Runs at 01:00 UTC on the 1st of every month (3:00 AM CAT)
+    - cron: '0 1 1 * *'
 
-# 2. DEFINE THE JOB
+# Define environment variables to pass secrets to steps securely
+env:
+  THINGSPEAK_CHANNEL_ID: ${{ secrets.THINGSPEAK_CHANNEL_ID }}
+  THINGSPEAK_READ_API_KEY: ${{ secrets.THINGSPEAK_READ_API_KEY }}
+
 jobs:
   build-and-commit:
-    runs-on: ubuntu-latest # Use a standard Linux virtual machine
+    runs-on: ubuntu-latest
 
-    # 3. DEFINE THE STEPS
     steps:
-      # Step 3.1: Check out the repository code
-      # This step downloads your repository content into the runner.
       - name: Check out repository
         uses: actions/checkout@v4
 
-      # Step 3.2: Set up Python environment
-      # Installs Python for running the training script.
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # Step 3.3: Install Python dependencies
-      # Reads the requirements.txt file and installs all necessary libraries.
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Step 3.4: Execute the Jupyter Notebook
-      # This is the core retraining step. It runs the entire model.ipynb notebook.
-      # The notebook will generate the 'model_data.h' file.
+      # 2. NEW STEP: Fetch data from ThingSpeak
+      # Downloads the last 8000 data points from the specified ThingSpeak channel.
+      - name: Fetch data from ThingSpeak
+        run: |
+          curl "https://api.thingspeak.com/channels/${THINGSPEAK_CHANNEL_ID}/feeds.csv?api_key=${THINGSPEAK_READ_API_KEY}&results=8000" -o thingspeak_feed.csv
+
+      # 3. NEW STEP: Pre-process the downloaded data
+      # Runs the python script to rename columns and format the CSV for the notebook.
+      - name: Pre-process data for notebook
+        run: python preprocess_thingspeak.py
+
+      # 4. EXISTING STEP (No changes needed)
+      # Runs the training notebook, which now uses the fresh 'dataset.csv'.
       - name: Run model training notebook
         run: jupyter nbconvert --to notebook --execute model.ipynb
 
-      # Step 3.5: Commit the updated model file
-      # This step checks for changes to 'model_data.h' and commits them back.
+      # 5. EXISTING STEP (No changes needed)
+      # Commits the newly generated 'model_data.h' if it has changed.
       - name: Commit and push if changed
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add model_data.h
-          # The following command commits only if there are actual changes to the file
-          git diff --quiet --exit-code model_data.h || git commit -m "Automated model update: new tcn_model.h [skip ci]"
+          git diff --quiet --exit-code model_data.h || git commit -m "Automated model update: new tcn_model.h from ThingSpeak data [skip ci]"
           git push
