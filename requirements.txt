@@ -5,3 +5,5 @@ tensorflow
 scikit-learn
 jupyter
 nbconvert
+requests
+keras-tcn
