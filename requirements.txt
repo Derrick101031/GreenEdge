@@ -1,9 +1,9 @@
 pandas
 numpy
 matplotlib
-tensorflow
+tensorflow==2.15.0
 scikit-learn
 jupyter
 nbconvert
 requests
-keras_tcn
+keras-tcn==3.5.0
