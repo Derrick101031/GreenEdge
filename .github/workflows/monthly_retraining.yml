@@ -1,10 +1,16 @@
+# GitHub Actions Workflow: Automated TinyML Model Retraining
+# This workflow automates the process of retraining your TCN model.
+# It runs a Python script monthly to fetch new data from ThingSpeak,
+# retrain the model, quantize it, and commit the updated C header file
+# back to the repository.
+
 name: Monthly Model Retraining
 
 on:
   # Trigger the workflow to run automatically at 00:00 on the 1st of every month
   schedule:
     - cron: '0 0 1 * *'
-  
+
   # Allows you to run this workflow manually from the Actions tab for testing
   workflow_dispatch:
 
@@ -14,21 +20,27 @@ jobs:
 
     steps:
       # Step 1: Check out the repository code
+      # This step downloads your repository content into the runner.
       - name: Checkout repository
         uses: actions/checkout@v4
 
       # Step 2: Set up Python environment
-      - name: Set up Python 3.11
+      # Installs Python for running the training script.
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11' 
+          python-version: '3.11'
 
-      # Step 3: Install dependencies
-      - name: Install Python libraries
+      # Step 3: Install Python dependencies
+      # Reads the requirements.txt file and installs all necessary libraries.
+      - name: Install dependencies
         run: |
-          pip install tensorflow pandas numpy scikit-learn requests tcn
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       # Step 4: Run the training script
+      # This is the core step. It runs the train_model.py script, which handles
+      # data fetching, training, quantization, and C header file generation.
       - name: Fetch data, train, and convert model
         env:
           THINGSPEAK_CHANNEL_ID: ${{ secrets.THINGSPEAK_CHANNEL_ID }}
@@ -36,8 +48,10 @@ jobs:
         run: python train_model.py
 
       # Step 5: Commit the updated model file back to the repository
+      # This action automatically commits changes in the specified file pattern.
       - name: Commit and push updated model
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: Automated monthly model retraining"
           file_pattern: tcn_model.h
+
