@@ -37,6 +37,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Install xxd (if needed)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xxd
 
       # Step 4: Run the training script
       # This is the core step. It runs the train_model.py script, which handles
