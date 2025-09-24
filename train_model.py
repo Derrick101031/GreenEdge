@@ -10,8 +10,8 @@ import json
 
 # --- Configuration ---
 # ThingSpeak Details (will be read from GitHub Secrets)
-CHANNEL_ID = os.environ.get('THINGSPEAK_CHANNEL_ID', '2989839')
-READ_API_KEY = os.environ.get('THINGSPEAK_READ_API_KEY', 'UK3XB82WBJS8ICO8')
+CHANNEL_ID = os.environ.get('THINGSPEAK_CHANNEL_ID', '2968337')
+READ_API_KEY = os.environ.get('THINGSPEAK_READ_API_KEY', 'JKW1ZRWYQDM0IEVM')
 RESULTS = 8000 # Max results per request from ThingSpeak
 
 DATASET_PATH = "dataset.csv"
